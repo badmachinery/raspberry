@@ -1,0 +1,4 @@
+MANUAL_STATE = 0
+AUTO_STATE = 1
+
+state = MANUAL_STATE

@@ -12,10 +12,10 @@ class Arduino:
     def connect(self):
         print('Arduino connecting')
         try:
-            self.connection = serial.Serial("/dev/ttyACM0", timeout=0.001, write_timeout=0.001, baudrate=115200)
+            self.connection = serial.Serial("/dev/ttyACM0", timeout=0.001, baudrate=115200)
             self.connected = True
         except Exception:
-            self.connection = serial.Serial("/dev/ttyACM1", timeout=0.001, write_timeout=0.001, baudrate=115200)
+            self.connection = serial.Serial("/dev/ttyACM1", timeout=0.001, baudrate=115200)
             self.connected = True
         print('Connected')
 
@@ -31,3 +31,5 @@ class Arduino:
 
     def receive(self, size=1024):
         return self.connection.read(size)
+
+arduino = Arduino()

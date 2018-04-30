@@ -23,5 +23,7 @@ class Socket_server:
     def send(self, symbol, data):
         self.connection.send((symbol + data + '\n').encode('ascii'))
 
-    def receive(self, size=1024):
+    def receive(self, size=32):
         return self.connection.recv(size)
+
+socket_server = Socket_server()
