@@ -7,11 +7,11 @@ class Socket_server:
 
     def create(self):
         self.sock = socket.socket()
-        self.sock.bind(('', 9090))
+        self.sock.bind(('', 9091))
         self.sock.listen(1)
-        print('Connecting')
+        print('Waiting for connection from client')
         self.connection, self.address = self.sock.accept()
-        print('Connected')
+        print('Client succesfully connected')
 
     def close(self):
         self.connection.close()

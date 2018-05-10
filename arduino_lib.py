@@ -1,7 +1,8 @@
 import serial
 
 class Arduino:
-    def __init__(self, do_connect=False):
+    def __init__(self, _address, do_connect=False):
+        self.address = _address
         if do_connect:
             self.connect()
 
@@ -10,14 +11,14 @@ class Arduino:
         self.connected = False
 
     def connect(self):
-        print('Arduino connecting')
+        print('Connecting to /dev/tty/ACM' + str(self.address))
         try:
-            self.connection = serial.Serial("/dev/ttyACM0", timeout=0.001, baudrate=115200)
+            self.connection = serial.Serial('/dev/ttyACM' + str(self.address), timeout=0.001, baudrate=115200)
             self.connected = True
         except Exception:
-            self.connection = serial.Serial("/dev/ttyACM1", timeout=0.001, baudrate=115200)
-            self.connected = True
-        print('Connected')
+            print('Connection failed. Exiting')
+            quit()
+        print('Connectin succeed')
 
     def reconnect(self):
         self.close()
@@ -32,4 +33,5 @@ class Arduino:
     def receive(self, size=1024):
         return self.connection.read(size)
 
-arduino = Arduino()
+arduino1 = Arduino(0)
+arduino2 = Arduino(1)
