@@ -4,105 +4,179 @@ import smbus
 from random import randint
 
 from threads import thread_handler
-from arduino_lib import arduino1, arduino2
+from arduino_lib import arduino_sensors, arduino_engine
 from connection import socket_server
 import constants as c
+import vars as v
+import scripts
 
-qwall = 100
-ewall = 100
-lwall = 100
-rwall = 100
-
-def arduino_reader():
-    global qwall, rwall, ewall, lwall
-
-    print('Arduino reader')
-    last_message_time = time.clock()
+def arduino_read_cycle():
+    '''
+    1) Update current time
+    2) Check shutdown signal
+    3) Reading sensors data: updating variables at vars.py
+    4) Reading engine data
+    5) Reconnecting if necessary
+    '''
     while True:
-        if thread_handler.events['arduino_reader'].is_set():
+        ''' 1) '''
+        v.current_time_sensors = time.time()
+
+        ''' 2) '''
+        if thread_handler.events['arduino_read_cycle'].is_set():
             return True
 
-        #if (time.clock() - last_message_time > 0.6): #This value seems OK
-        #    print('Reset')
-        #    arduino.reconnect()
-        #    last_message_time = time.clock()
+        ''' 3) '''
+        read_ultrasonic_sensors()
+        ''' 4) '''
+        read_arduino_engine()
 
-        if arduino1.is_connected():
-            data = arduino1.receive(32)
-            if data:
-                last_message_time = time.clock()
-                data = data.decode('ascii')
-                if data[0] == 'Q':
-                    match = re.search(r'[^QELR]\d+[^\n]', data)
-                    if match:
-                        qwall = int(match.group(0))
-                elif data[0] == 'E':
-                    match = re.search(r'[^QELR]\d+[^\n]', data)
-                    if match:
-                        ewall = int(match.group(0))
-                elif data[0] == 'L':
-                    match = re.search(r'[^QELR]\d+[^\n]', data)
-                    if match:
-                        lwall = int(match.group(0))
-                elif data[0] == 'R':
-                    match = re.search(r'[^QELR]\d+[^\n]', data)
-                    if match:
-                        rwall = int(match.group(0))
-                if (0 < ewall < 30 or 0 < qwall < 30) and (c.mode != c.MODE_BACK):
-                    c.mode = c.MODE_BACK
-                    print('Evasion')
-                    print('Qwall: {}, Ewall: {}, Rwall: {}, LWall: {}'.format(qwall, ewall, rwall, lwall))
-                    thread_handler.new_thread(test)
+        ''' 5) '''
+        #if (v.current_time_sensors - v.arduino_engine_last_answer > c.RECONNECTION_TIME):
+        #    print('Reconnecting arduino_engine')
+        #    arduino_engine.reconnect()
+        #    v.arduino_engine_last_answer = time.time()
 
-        if arduino2.is_connected():
-            data = arduino2.receive(32)
-            if data:
-                last_message_time = time.clock()
+        #if (v.current_time_sensors - v.arduino_sensors_last_answer > c.RECONNECTION_TIME):
+        #    print('Reconnecting arduino_sensors')
+        #    arduino_sensors.reconnect()
+        #    v.arduino_sensors_last_answer = time.time()
 
-def client_reader():
-    print('Client reader')
-    c.mode = c.MODE_MANUAL
-
+def client_read_cycle():
+    '''
+    1) Update current time
+    2) Check shutdown signal
+    3) Receiving data from client
+    4) Trying to read command from client
+    5) Trying to read data from client
+    6) Shutting down if connection lost
+    '''
     while True:
-        if thread_handler.events['client_reader'].is_set():
+        ''' 1) '''
+        v.current_time_client = time.time()
+
+        ''' 2) '''
+        if thread_handler.events['client_read_cycle'].is_set():
             return True
 
+        ''' 3) '''
         data = socket_server.receive()
         if data:
-            command = re.search(r'R.+?\n', data.decode('ascii'))
+            data = data.decode('ascii')
+            v.client_last_answer = time.time()
+            ''' 4) '''
+            command = re.search(r'C.+?\n', data)
             if command:
-                command = re.sub(r'R|\n', '', command.group(0))
-                if command == 'stop':
-                    thread_handler.stop_all_threads()
-                    time.sleep(0.2)
-                    arduino1.close()
-                    arduino2.close()
-                    socket_server.close()
-                    return True
-                elif command == 'script':
-                    thread_handler.new_thread(custom_script)
-                    c.state = c.MODE_AUTO
-                elif command == 'reload':
-                    arduino1.reconnect()
-                    arduino2.reconnect()
-            else:
-                if c.mode == c.MODE_MANUAL:
-                    if arduino2.is_connected():
-                        arduino2.send(data)
+                command = re.sub(r'C|\n', '', command.group(0))
+                v.client_commands.append(command)
+            ''' 5) '''
+            speed = re.search(r's.+?\n', data)
+            if speed:
+                speed = re.sub(r's|\n', '', speed.group(0))
+                if speed:
+                    speed = int(speed)
+                v.engine_speed = speed
+            rotation = re.search(r'r.+?\n', data)
+            if rotation:
+                rotation = re.sub(r'r|\n', '', rotation.group(0))
+                if rotation:
+                    rotation = int(rotation)
+                v.rotation_angle = rotation
 
-def move(speed, rotation, seconds):
-    t = time.time()
-    while time.time() - t < seconds:
-        arduino2.send(('s' + str(speed) + '\n').encode('ascii'))
-        arduino2.send(('r' + str(rotation) + '\n').encode('ascii'))
+        ''' 6) '''
+        #if v.current_time_client - v.client_last_answer < c.LOST_CONNECTION_TIME:
+        #    thread_handler.stop_all_threads()
+        #    v.state = c.STATE_LOST
 
-def custom_script():
-    for i in range(5):
-        move(c.ENGINE_SPEED[randint(-1, 1)], randint(6000, 8000), 2)
-    c.mode = c.MODE_MANUAL
+def main_cycle():
+    '''
+    1) Check shutdown signal
+    2) Executing commands
+    3) Check obstacles to evade
+    4) Sending data to arduino if we are in manual state
+    5) Printing data if we want to
+    '''
+    while True:
+        ''' 1) '''
+        if thread_handler.events['main_cycle'].is_set():
+            thread_handler.stop_all_threads()
+            time.sleep(0.2)
+            arduino_engine.close()
+            arduino_sensors.close()
+            socket_server.close()
+            return True
 
-def test():
-    move(c.ENGINE_SPEED[0], c.SERVO_ANGLE[0], 0.1)
-    move(c.ENGINE_SPEED[-1], c.SERVO_ANGLE[0], 0.5)
-    print('Evaded')
-    c.mode = c.MODE_MANUAL
+        ''' 2) '''
+        commands = v.client_commands.copy()
+        v.client_commands.clear()
+        for command in commands:
+            try:
+                command_handler[command]()
+            except KeyError:
+                print ("Unknown command: '{}'".format(command))
+
+        ''' 3) '''
+        if need_to_evade_front():
+            v.state = c.STATE_BACK
+            thread_handler.new_thread(scripts.simple_front_obstacle_evasion())
+
+        ''' 4) '''
+        if v.state == c.STATE_MANUAL:
+            send_data_to_arduino_engine()
+
+        ''' 5) '''
+        #print (v.obstacle_distance_front_left, v.obstacle_distance_front_right, v.obstacle_distance_left, v.obstacle_distance_right)
+        #print(v.engine_speed, v.rotation_angle)
+
+def read_ultrasonic_sensors():
+    if arduino_sensors.is_connected():
+        data = arduino_sensors.receive(70)
+        if data:
+            v.arduino_sensors_last_answer = time.time()
+            data = data.decode('ascii')
+            if data[0] == 'D':
+                help = re.findall(r'd', data)
+                if len(help) == 3:
+                    match = re.findall(r'\d+', data)
+                    if match:
+                        match = list(map(int, match))
+                        if len(match) == 4:
+                            v.obstacle_distance_front_left = match[0]
+                            v.obstacle_distance_front_right = match[1]
+                            v.obstacle_distance_left = match[2]
+                            v.obstacle_distance_right = match[3]
+
+def read_arduino_engine():
+    if arduino_engine.is_connected():
+        data = arduino_engine.receive(32)
+        if data:
+            v.arduino_engine_last_answer = time.time()
+
+def send_data_to_arduino_engine():
+    if arduino_engine.is_connected():
+        arduino_engine.send('s', v.engine_speed)
+        arduino_engine.send('r', v.rotation_angle)
+
+def need_to_evade_front():
+    if (1 < v.obstacle_distance_front_left < c.AVOIDANCE_DISTANCE) or (1 < v.obstacle_distance_front_right < c.AVOIDANCE_DISTANCE):
+        return True
+    else:
+        return False
+
+
+def handle_command_stop():
+    thread_handler.stop_all_threads()
+
+def handle_command_script():
+    v.state = c.STATE_AUTO
+    thread_handler.new_thread(scripts.custom_script)
+
+def handle_command_reload():
+    arduino_engine.reconnect()
+    arduino_sensors.reconnect()
+
+command_handler = {
+'Stop': handle_command_stop,
+'Auto': handle_command_script,
+'Load': handle_command_reload
+}
