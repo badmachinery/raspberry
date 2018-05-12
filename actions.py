@@ -116,9 +116,9 @@ def main_cycle():
                 print ("Unknown command: '{}'".format(command))
 
         ''' 3) '''
-        if need_to_evade_front():
+        if scripts.obstacle_is_at_front():
             v.state = c.STATE_BACK
-            thread_handler.new_thread(scripts.simple_front_obstacle_evasion())
+            thread_handler.new_thread(scripts.simple_front_obstacle_evasion(v.state))
 
         ''' 4) '''
         if v.state == c.STATE_MANUAL:
@@ -152,17 +152,16 @@ def read_arduino_engine():
         if data:
             v.arduino_engine_last_answer = time.time()
 
-def send_data_to_arduino_engine():
+def send_data_to_arduino_engine(speed=None, rotation=None):
     if arduino_engine.is_connected():
-        arduino_engine.send('s', v.engine_speed)
-        arduino_engine.send('r', v.rotation_angle)
-
-def need_to_evade_front():
-    if (1 < v.obstacle_distance_front_left < c.AVOIDANCE_DISTANCE) or (1 < v.obstacle_distance_front_right < c.AVOIDANCE_DISTANCE):
-        return True
-    else:
-        return False
-
+        if speed:
+            arduino_engine.send('s', speed)
+        else:
+            arduino_engine.send('s', v.engine_speed)
+        if rotation:
+            arduino_engine.send('r', rotation)
+        else:
+            arduino_engine.send('r', v.rotation_angle)
 
 def handle_command_stop():
     thread_handler.stop_all_threads()
