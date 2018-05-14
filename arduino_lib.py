@@ -18,7 +18,7 @@ class Arduino:
         except Exception:
             print('Connection failed. Exiting')
             quit()
-        print('Connectoin succeed')
+        print('Connection succeed')
 
     def reconnect(self):
         self.close()
@@ -28,14 +28,28 @@ class Arduino:
         return self.connected
 
     def send(self, symbol, data):
-        self.connection.write((symbol + str(data) + '\n').encode('ascii'))
+        try:
+            if self.is_connected():
+                self.connection.write((symbol + str(data) + '\n').encode('ascii'))
+        except Exception:
+            print('Sending exception')
 
     def send_raw(self, data):
         ''' data - str '''
-        self.connection.write(data.encode('ascii'))
+        try:
+            if self.is_connected():
+                self.connection.write(data.encode('ascii'))
+        except Exception:
+            print('Sending exception')
 
     def receive(self, size=1024):
-        return self.connection.read(size)
+        try:
+            if self.is_connected():
+                return self.connection.read(size)
+            else:
+                return None
+        except Exception:
+            print('Receiving exception')
 
-arduino_sensors = Arduino(1)
-arduino_engine = Arduino(0)
+arduino_sensors = Arduino(0)
+arduino_engine = Arduino(1)

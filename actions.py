@@ -32,7 +32,8 @@ def arduino_read_cycle():
         read_arduino_engine()
 
         ''' 5) '''
-        #if (v.current_time_sensors - v.arduino_engine_last_answer > c.RECONNECTION_TIME):
+        #if abs(v.current_time_sensors - v.arduino_engine_last_answer) > c.RECONNECTION_TIME:
+        #    arduino_engine.conneced = False
         #    print('Reconnecting arduino_engine')
         #    arduino_engine.reconnect()
         #    v.arduino_engine_last_answer = time.time()
@@ -117,8 +118,9 @@ def main_cycle():
 
         ''' 3) '''
         if scripts.obstacle_is_at_front():
-            v.state = c.STATE_BACK
-            thread_handler.new_thread(scripts.simple_front_obstacle_evasion(v.state))
+            pass
+            #v.state = c.STATE_BACK
+            #thread_handler.new_thread(scripts.simple_front_obstacle_evasion(v.state))
 
         ''' 4) '''
         if v.state == c.STATE_MANUAL:
@@ -129,39 +131,36 @@ def main_cycle():
         #print(v.engine_speed, v.rotation_angle)
 
 def read_ultrasonic_sensors():
-    if arduino_sensors.is_connected():
-        data = arduino_sensors.receive(70)
-        if data:
-            v.arduino_sensors_last_answer = time.time()
-            data = data.decode('ascii')
-            if data[0] == 'D':
-                help = re.findall(r'd', data)
-                if len(help) == 3:
-                    match = re.findall(r'\d+', data)
-                    if match:
-                        match = list(map(int, match))
-                        if len(match) == 4:
-                            v.obstacle_distance_front_left = match[0]
-                            v.obstacle_distance_front_right = match[1]
-                            v.obstacle_distance_left = match[2]
-                            v.obstacle_distance_right = match[3]
+    data = arduino_sensors.receive(70)
+    if data:
+        v.arduino_sensors_last_answer = time.time()
+        data = data.decode('ascii')
+        if data[0] == 'D':
+            help = re.findall(r'd', data)
+            if len(help) == 3:
+                match = re.findall(r'\d+', data)
+                if match:
+                    match = list(map(int, match))
+                    if len(match) == 4:
+                        v.obstacle_distance_front_left = match[0]
+                        v.obstacle_distance_front_right = match[1]
+                        v.obstacle_distance_left = match[2]
+                        v.obstacle_distance_right = match[3]
 
 def read_arduino_engine():
-    if arduino_engine.is_connected():
-        data = arduino_engine.receive(32)
-        if data:
-            v.arduino_engine_last_answer = time.time()
+    data = arduino_engine.receive(32)
+    if data:
+        v.arduino_engine_last_answer = time.time()
 
 def send_data_to_arduino_engine(speed=None, rotation=None):
-    if arduino_engine.is_connected():
-        if speed:
-            arduino_engine.send('s', speed)
-        else:
-            arduino_engine.send('s', v.engine_speed)
-        if rotation:
-            arduino_engine.send('r', rotation)
-        else:
-            arduino_engine.send('r', v.rotation_angle)
+    if speed:
+        arduino_engine.send('s', speed)
+    else:
+        arduino_engine.send('s', v.engine_speed)
+    if rotation:
+        arduino_engine.send('r', rotation)
+    else:
+        arduino_engine.send('r', v.rotation_angle)
 
 def handle_command_stop():
     thread_handler.stop_all_threads()
@@ -171,11 +170,20 @@ def handle_command_script():
     thread_handler.new_thread(scripts.custom_script)
 
 def handle_command_reload():
+    print('Reconnecting')
     arduino_engine.reconnect()
-    arduino_sensors.reconnect()
+    #arduino_sensors.reconnect()
+
+def handle_command_way():
+    thread_handler.new_thread(scripts.move_through_the_corridor, name='move_through_the_corridor')
+
+def handle_command_break():
+    scripts.do_break()
 
 command_handler = {
 'Stop': handle_command_stop,
 'Auto': handle_command_script,
-'Load': handle_command_reload
+'Load': handle_command_reload,
+'Way': handle_command_way,
+'Break': handle_command_break
 }
