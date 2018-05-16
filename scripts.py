@@ -36,11 +36,16 @@ def move(speed, rotation, seconds=0.1):
 
 def do_break(power=700, seconds=0.5):
     ''' moving in every state '''
+    v.state = c.STATE_AUTO
     print('Breaking: {}, {}s'.format(power, seconds))
     t = time.time()
+    #arduino_engine.send('s', c.ENGINE_SPEED[-3])
+    #move(c.ENGINE_SPEED[0], c.SERVO_ANGLE[0], 1)
     while time.time() - t < seconds:
-        arduino_engine.send('b', power)
-        arduino_engine.send('r', c.SERVO_ANGLE[0])
+        #arduino_engine.send('b', power)
+        #arduino_engine.send('r', c.SERVO_ANGLE[0])
+        arduino_engine.send('s', c.ENGINE_SPEED[-3])
+    v.state = c.STATE_MANUAL
 
 def stop():
     ''' TODO we should take encoders' data into a point '''
@@ -81,7 +86,7 @@ def move_through_the_corridor(new_state = c.STATE_ALGORITHM, last_state = c.STAT
             else:
                 print('Rotating left')
                 rotation = c.SERVO_ANGLE[-30]
-        else:
+        elif v.obstacle_distance_left > v.obstacle_distance_right:
             if obstacle_is_at_right(40):
                 print('Rotating left')
                 rotation = c.SERVO_ANGLE[-30]
@@ -91,6 +96,9 @@ def move_through_the_corridor(new_state = c.STATE_ALGORITHM, last_state = c.STAT
             else:
                 print('Rotating right')
                 rotation = c.SERVO_ANGLE[30]
+        else:
+            rotation = c.SERVO_ANGLE[0]
+
         move(speed, rotation, 0.1)
         move(c.ENGINE_SPEED[0], rotation, 0.1)
         print(v.obstacle_distance_left, v.obstacle_distance_right)

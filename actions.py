@@ -1,6 +1,5 @@
 import time
 import re
-import smbus
 from random import randint
 
 from threads import thread_handler
@@ -43,7 +42,7 @@ def arduino_read_cycle():
         #    arduino_sensors.reconnect()
         #    v.arduino_sensors_last_answer = time.time()
 
-def client_read_cycle():
+def client_messaging_cycle():
     '''
     1) Update current time
     2) Check shutdown signal
@@ -51,13 +50,14 @@ def client_read_cycle():
     4) Trying to read command from client
     5) Trying to read data from client
     6) Shutting down if connection lost
+    7) Sending data to client
     '''
     while True:
         ''' 1) '''
         v.current_time_client = time.time()
 
         ''' 2) '''
-        if thread_handler.events['client_read_cycle'].is_set():
+        if thread_handler.events['client_messaging_cycle'].is_set():
             return True
 
         ''' 3) '''
@@ -89,10 +89,16 @@ def client_read_cycle():
         #    thread_handler.stop_all_threads()
         #    v.state = c.STATE_LOST
 
+        ''' 7) '''
+        socket_server.send('Q', v.obstacle_distance_front_left)
+        socket_server.send('E', v.obstacle_distance_front_right)
+        socket_server.send('L', v.obstacle_distance_left)
+        socket_server.send('R', v.obstacle_distance_right)
+
 def main_cycle():
     '''
     1) Check shutdown signal
-    2) Executing commands
+    2) Execute commands
     3) Check obstacles to evade
     4) Sending data to arduino if we are in manual state
     5) Printing data if we want to
@@ -127,7 +133,8 @@ def main_cycle():
             send_data_to_arduino_engine()
 
         ''' 5) '''
-        #print (v.obstacle_distance_front_left, v.obstacle_distance_front_right, v.obstacle_distance_left, v.obstacle_distance_right)
+        #print ("3d" % v.obstacle_distance_front_left, '3d' % v.obstacle_distance_front_right, '3d' % v.obstacle_distance_left, '3d' % v.obstacle_distance_right)
+        print('{:3d} {:3d} {:3d} {:3d}'.format(v.obstacle_distance_front_left, v.obstacle_distance_front_right, v.obstacle_distance_left, v.obstacle_distance_right))
         #print(v.engine_speed, v.rotation_angle)
 
 def read_ultrasonic_sensors():

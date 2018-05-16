@@ -21,7 +21,10 @@ class Socket_server:
         self.create()
 
     def send(self, symbol, data):
-        self.connection.send((symbol + data + '\n').encode('ascii'))
+        self.connection.send((symbol + str(data) + '\n').encode('ascii'))
+
+    def send_raw(self, data):
+        self.connection.send((str(data) + '\n').encode('ascii'))
 
     def receive(self, size=32):
         return self.connection.recv(size)

@@ -8,7 +8,7 @@ def main():
     arduino_sensors.connect()
     arduino_engine.connect()
 
-    thread_handler.new_thread(function=actions.client_read_cycle, name='client_read_cycle')
+    thread_handler.new_thread(function=actions.client_messaging_cycle, name='client_messaging_cycle')
     thread_handler.new_thread(function=actions.arduino_read_cycle, name='arduino_read_cycle')
     thread_handler.new_thread(function=actions.main_cycle, name='main_cycle')
 
