@@ -1,24 +1,31 @@
 import serial
+import logging
+
 
 class Arduino:
     def __init__(self, _address, do_connect=False):
         self.address = _address
+        self.connection = None
+        self.connected = False
         if do_connect:
             self.connect()
 
     def close(self):
+        logging.info("Arduino '{0}' :: Closing connection to {0}".format(self.address))
         self.connection.close()
         self.connected = False
+        logging.info("Arduino '{0}' :: Connection to {0} closed".format(self.address))
 
     def connect(self):
-        print('Connecting to /dev/tty/ACM' + str(self.address))
+        logging.info("Arduino '{0}' :: Connecting to {0}".format(self.address))
         try:
-            self.connection = serial.Serial('/dev/ttyACM' + str(self.address), timeout=0.001, baudrate=115200)
+            self.connection = serial.Serial(self.address, timeout=0.001, baudrate=115200)
             self.connected = True
+            logging.info("Arduino '{0}' :: Successfully connected to {0}".format(self.address))
+            return True
         except Exception:
-            print('Connection failed. Exiting')
+            logging.critical("Arduino '{0}' :: Connection failed".format(self.address))
             quit()
-        print('Connection succeed')
 
     def reconnect(self):
         self.close()
@@ -32,15 +39,14 @@ class Arduino:
             if self.is_connected():
                 self.connection.write((symbol + str(data) + '\n').encode('ascii'))
         except Exception:
-            print('Sending exception')
+            logging.warning("Arduino '{}' :: Sending exception ({}{})".format(self.address, symbol, data))
 
     def send_raw(self, data):
-        ''' data - str '''
         try:
             if self.is_connected():
-                self.connection.write(data.encode('ascii'))
+                self.connection.write(str(data).encode('ascii'))
         except Exception:
-            print('Sending exception')
+            logging.warning("Arduino '{}' :: Sending exception ({})".format(self.address, data))
 
     def receive(self, size=1024):
         try:
@@ -49,7 +55,4 @@ class Arduino:
             else:
                 return None
         except Exception:
-            print('Receiving exception')
-
-arduino_sensors = Arduino(0)
-arduino_engine = Arduino(1)
+            logging.warning("Arduino '{}' :: Receiving exception".format(self.address))

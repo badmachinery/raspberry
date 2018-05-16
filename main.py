@@ -1,16 +1,18 @@
+import logging
+
 import actions
-from threads import thread_handler
-from connection import socket_server
-from arduino_lib import arduino_sensors, arduino_engine
+import scripts
 
 def main():
-    socket_server.create()
-    arduino_sensors.connect()
-    arduino_engine.connect()
-
-    thread_handler.new_thread(function=actions.client_messaging_cycle, name='client_messaging_cycle')
-    thread_handler.new_thread(function=actions.arduino_read_cycle, name='arduino_read_cycle')
-    thread_handler.new_thread(function=actions.main_cycle, name='main_cycle')
+    logging.basicConfig(level=logging.DEBUG, filemode="w")
+    actions.main_cycle()
+    '''
+    try:
+        actions.main_cycle()
+    except Exception:
+        print(str(Exception))
+        scripts.do_break()
+    '''
 
 if __name__ == "__main__":
     main()
