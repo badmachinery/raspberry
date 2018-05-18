@@ -6,6 +6,7 @@ import vars
 import actions
 
 mark = 0
+flag = False
 
 
 def obstacle_is_at_front_left(distance=consts.AVOIDANCE_DISTANCE):
@@ -17,11 +18,11 @@ def obstacle_is_at_front_right(distance=consts.AVOIDANCE_DISTANCE):
 
 
 def obstacle_is_at_front(distance=consts.AVOIDANCE_DISTANCE):
-    return obstacle_is_at_front_left(distance) or obstacle_is_at_front_right(distance)
+    return obstacle_is_at_front_left(distance)
 
 
 def obstacle_is_at_front_both(distance=consts.AVOIDANCE_DISTANCE):
-    return obstacle_is_at_front_left(distance) and obstacle_is_at_front_right(distance)
+    return obstacle_is_at_front_left(distance)
 
 
 def obstacle_is_at_left(distance=consts.AVOIDANCE_DISTANCE):
@@ -44,7 +45,10 @@ def move(speed, rotation, seconds=0.1):
 
 
 def do_break():
+    vars.ticker = time.time()
     logging.debug("@ do_break")
+    if vars.lastspeed <= consts.ENGINE_SPEED[0]:
+        return
     t = time.time()
     while time.time() - t < 0.3:    # Blocks everything, breaking has the highest priority
         actions.send_data_to_arduino_engine(consts.ENGINE_SPEED[-3], consts.SERVO_ANGLE[0])
@@ -68,12 +72,19 @@ def simple_front_obstacle_evasion(new_state = c.STATE_BACK, last_state = c.STATE
     v.state = last_state
 '''
 
-def move_through_the_corridor():
+def move_through_the_corridor(moving):
     logging.debug('@ move_through_the_corridor')
     if not obstacle_is_at_front(50):
         logging.debug('No obstacle at front -> moving further')
-        speed = consts.ENGINE_SPEED[1]
+        if moving:
+            speed = consts.ENGINE_SPEED[1]
+        else:
+            speed = consts.ENGINE_SPEED[0]
         rotation = consts.SERVO_ANGLE[0]
+        if vars.obstacle_distance_right == 1:
+            vars.obstacle_distance_right = 500
+        if vars.obstacle_distance_left == 1:
+            vars.obstacle_distance_left = 500
         if vars.obstacle_distance_left < vars.obstacle_distance_right:
             if vars.obstacle_distance_left < 40:
                 rotation = consts.SERVO_ANGLE[30]
@@ -100,10 +111,20 @@ def move_through_the_corridor():
 
         actions.send_data_to_arduino_engine(speed, rotation)
 
-        logging.debug("Sensors info: {}, {}, {}, {}".format(vars.obstacle_distance_front_left, vars.obstacle_distance_front_right,
+        logging.debug("Sensors info: {}, {}, {}".format(vars.obstacle_distance_front_left,
                                                             vars.obstacle_distance_left, vars.obstacle_distance_right))
-        return 1
-    else:
-        do_break()
-        logging.debug('Obstacle is at front -> stop moving')
+
         return 0
+        #Max - 0.003 seconds for iteration
+
+    else:
+        if vars.stopper > 0 and time.time() - vars.ticker < 0.1:
+            print("Sensors info: {}, {}, {}".format(vars.obstacle_distance_front_left,
+                                                    vars.obstacle_distance_left, vars.obstacle_distance_right))
+            do_break()
+            logging.debug('Obstacle is at front -> stop moving')
+            vars.stopper = 0
+            return 1
+        else:
+            vars.stopper = 1
+            vars.ticker = time.time()

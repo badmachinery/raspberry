@@ -52,7 +52,7 @@ def main_cycle():
         arduino_read()
         state_to_actions[vars.state]()
         logging.debug('main_cycle :: end iteration')
-
+    #Max - 0.045 seconds
 
 def read_ultrasonic_sensors():
     logging.debug('@ read_ultrasonic_sensors')
@@ -63,17 +63,19 @@ def read_ultrasonic_sensors():
         logging.debug("Data: {}".format(data))
         if data[0] == 'D':
             temp = re.findall(r'd', data)
-            if len(temp) == 3:
+            if len(temp) == 2:
                 match = re.findall(r'\d+', data)
                 if match:
                     match = list(map(int, match))
-                    if len(match) == 4:
+                    if len(match) == 3:
+                        if 1 < match[0] < 50:
+                            scripts.do_break()
+
                         vars.obstacle_distance_front_left = match[0]
-                        vars.obstacle_distance_front_right = match[1]
-                        vars.obstacle_distance_left = match[2]
-                        vars.obstacle_distance_right = match[3]
-                        logging.debug('Ultrasonic values changed to: {}, {}, {}, {}'.format(match[0], match[1],
-                                                                                            match[2], match[3]))
+                        vars.obstacle_distance_left = match[1]
+                        vars.obstacle_distance_right = match[2]
+                        logging.debug('Ultrasonic values changed to: {}, {}, {}'.format(match[0], match[1],
+                                                                                            match[2]))
     logging.debug('$ read_ultrasonic_sensors')
 
 
@@ -93,6 +95,7 @@ def send_data_to_arduino_engine(speed=None, rotation=None):
         rotation = vars.rotation_angle
     logging.debug("Speed: {}, Rotation: {}".format(speed, rotation))
     vars.arduino_engine.send('s', speed)
+    vars.lastspeed = speed
     vars.arduino_engine.send('r', rotation)
     logging.debug('$ send_data_to_arduino_engine')
 
@@ -109,6 +112,7 @@ def read_client():
         if command:
             command = re.sub(r'[C\n]', '', command.group(0))
             logging.debug("Command: {}".format(command))
+            print(command)
             execute_command(command)
 
         speed = re.search(r's.+?\n', data)
@@ -139,7 +143,6 @@ def execute_command(command):
 def send_ultrasonic_data():
     logging.debug('@ send_ultrasonic_data')
     vars.server.send('Q', vars.obstacle_distance_front_left)
-    vars.server.send('E', vars.obstacle_distance_front_right)
     vars.server.send('L', vars.obstacle_distance_left)
     vars.server.send('R', vars.obstacle_distance_right)
     logging.debug('$ send_ultrasonic_data')
@@ -181,11 +184,26 @@ def actions_state_reload():
 
 
 def actions_state_way():
+    if not vars.wayflag:
+        vars.ticker = time.time()
+        vars.wayflag = True
+        vars.wayflag1 = True
+
+    if vars.wayflag1:
+        if time.time() - vars.ticker > 0.15:
+            vars.wayflag1 = False
+            vars.ticker = time.time()
+    else:
+        if time.time() - vars.ticker > 0.3:
+            vars.wayflag1 = True
+            vars.ticker = time.time()
+
+    res = scripts.move_through_the_corridor(vars.wayflag1)
     logging.debug("@ actions_state_way")
-    res = scripts.move_through_the_corridor()
     if res == 1:
         vars.state = consts.STATE_MANUAL
         logging.debug("State changed :: STATE_MANUAL")
+        vars.wayflag = False
     logging.debug("$ actions_state_way")
 
 
@@ -202,7 +220,7 @@ command_to_state = {
     'Auto': consts.STATE_AUTO,
     'Reload': consts.STATE_RELOAD,
     'Way': consts.STATE_WAY,
-    'Break': consts.STATE_BREAK
+    'Pow': consts.STATE_BREAK
 }
 state_to_actions = {
     consts.STATE_MANUAL: actions_state_manual,

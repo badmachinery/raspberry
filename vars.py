@@ -21,4 +21,12 @@ state = consts.STATE_MANUAL
 engine_speed = consts.ENGINE_SPEED[0]
 rotation_angle = consts.SERVO_ANGLE[0]
 
+wayflag = False
+wayflag1 = False
+ticker = 0
+
+
+lastspeed = consts.ENGINE_SPEED[0]
+
+stopper = 0
 
