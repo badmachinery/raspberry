@@ -4,7 +4,7 @@ import actions
 import scripts
 
 def main():
-    logging.basicConfig(level=logging.DEBUG, filemode="w")
+    #logging.basicConfig(level=logging.DEBUG, filemode="w")
     actions.main_cycle()
     '''
     try:

@@ -10,7 +10,7 @@ import scripts
 def arduino_read():
     logging.debug('@ arduino_read')
     # current_time = time.time()    # Update current time
-    read_ultrasonic_sensors()
+    #read_ultrasonic_sensors()
     read_arduino_engine()
     '''
     if abs(current_time - vars.arduino_engine_last_answer_time) > consts.RECONNECTION_TIME:    # Reconnecting engine
@@ -44,7 +44,7 @@ def main_cycle():
     logging.debug('@ main_cycle')
     vars.server.create()
     vars.arduino_engine.connect()
-    vars.arduino_sensors.connect()
+    #vars.arduino_sensors.connect()
 
     while True:
         logging.debug('main_cycle :: start iteration')
@@ -82,6 +82,8 @@ def read_ultrasonic_sensors():
 def read_arduino_engine():
     logging.debug('@ read_arduino_engine')
     data = vars.arduino_engine.receive(32)
+    if data:
+        print (data)
     # if data:
     #     vars.arduino_engine_last_answer_time = time.time()
     logging.debug('$ read_arduino_engine')
@@ -95,8 +97,29 @@ def send_data_to_arduino_engine(speed=None, rotation=None):
         rotation = vars.rotation_angle
     logging.debug("Speed: {}, Rotation: {}".format(speed, rotation))
     vars.arduino_engine.send('s', speed)
+    '''
+    if rotation != consts.ROTATION[0]:
+        vars.arduino_engine.send('r', rotation)
+    else:
+        vars.arduino_engine.send('s', speed)
+    '''
+    '''
+    if rotation != consts.ROTATION[0]:
+        if rotation != vars.lastrotation:
+            vars.arduino_engine.send('r', rotation)
+            vars.lastrotation = rotation
+    else:
+        if speed != vars.lastspeed:
+            vars.arduino_engine.send('s', speed)
+            vars.lastspeed = speed
+    '''
+
+
+    '''
+    vars.arduino_engine.send('s', speed)
     vars.lastspeed = speed
     vars.arduino_engine.send('r', rotation)
+    '''
     logging.debug('$ send_data_to_arduino_engine')
 
 

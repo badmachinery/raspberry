@@ -118,13 +118,18 @@ def move_through_the_corridor(moving):
         #Max - 0.003 seconds for iteration
 
     else:
-        if vars.stopper > 0 and time.time() - vars.ticker < 0.1:
-            print("Sensors info: {}, {}, {}".format(vars.obstacle_distance_front_left,
-                                                    vars.obstacle_distance_left, vars.obstacle_distance_right))
-            do_break()
-            logging.debug('Obstacle is at front -> stop moving')
-            vars.stopper = 0
-            return 1
+        if vars.stopper > 0:
+            if time.time() - vars.ticker < 0.1:
+                print("Sensors info: {}, {}, {}".format(vars.obstacle_distance_front_left,
+                                                        vars.obstacle_distance_left, vars.obstacle_distance_right))
+                do_break()
+                logging.debug('Obstacle is at front -> stop moving')
+                vars.stopper = 0
+                return 1
+            else:
+                vars.stopper = 0
+                return 0
         else:
             vars.stopper = 1
             vars.ticker = time.time()
+            return 0
