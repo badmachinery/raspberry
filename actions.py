@@ -61,15 +61,12 @@ def update_sensor_data(data):
     if data[0] == consts.command_symbol_arduino['sensor_forward']:
         vars.sensor_front_data = nums
         logging.debug('sensor_front_data -> {}'.format(nums))
-        print('f', nums)
     elif data[0] == consts.command_symbol_arduino['sensor_left']:
         vars.sensor_left_data = nums
         logging.debug('sensor_left_data -> {}'.format(nums))
-        print('l', nums)
     elif data[0] == consts.command_symbol_arduino['sensor_right']:
         vars.sensor_right_data = nums
         logging.debug('sensor_right_data -> {}'.format(nums))
-        print('r', nums)
 
 
 #@log
@@ -140,9 +137,15 @@ def execute_manual_command(command):
         if vars.engine_speed_max == 0:
             vars.engine_speed_max = 1
     elif command == consts.command_symbol_client['left']:
-        vars.rotation = consts.rotation[-3]
+        if vars.engine_speed == consts.engine_speed[0]:
+            vars.rotation = consts.rotation[-3]
+        else:
+            vars.rotation = consts.rotation[-1]
     elif command == consts.command_symbol_client['right']:
-        vars.rotation = consts.rotation[3]
+        if vars.engine_speed == consts.engine_speed[0]:
+            vars.rotation = consts.rotation[3]
+        else:
+            vars.rotation = consts.rotation[1]
     elif command == consts.command_symbol_client['middle']:
         vars.rotation = consts.rotation[0]
 
@@ -179,25 +182,11 @@ def actions_state_reload():
 
 #@log
 def actions_state_way():
-    if not vars.wayflag:
-        vars.ticker = time.time()
-        vars.wayflag = True
-        vars.wayflag1 = True
-
-    if vars.wayflag1:
-        if time.time() - vars.ticker > 0.15:
-            vars.wayflag1 = False
-            vars.ticker = time.time()
-    else:
-        if time.time() - vars.ticker > 0.3:
-            vars.wayflag1 = True
-            vars.ticker = time.time()
-
-    res = scripts.move_through_the_corridor(vars.wayflag1)
-    if res == 1:
+    res = scripts.move_through_the_corridor()
+    if res == True:
         vars.state = consts.state['manual']
         logging.debug("State changed :: STATE_MANUAL")
-        vars.wayflag = False
+        print('Done')
 
 
 command_to_state = {

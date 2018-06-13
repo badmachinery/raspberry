@@ -39,13 +39,10 @@ def stop():
 
 
 #@log
-def move_through_the_corridor(moving):
+def move_through_the_corridor():
     if not obstacle_is_at_front(50):
         logging.debug('No obstacle at front -> moving further')
-        if moving:
-            speed = consts.engine_speed[3]
-        else:
-            speed = consts.engine_speed[0]
+        speed = consts.engine_speed[3]
         rotation = consts.rotation[0]
         if vars.sensor_right_data == 1:
             vars.sensor_right_data = 500
@@ -53,46 +50,36 @@ def move_through_the_corridor(moving):
             vars.sensor_left_data = 500
         if vars.sensor_left_data < vars.sensor_right_data:
             if vars.sensor_left_data < 40:
-                rotation = consts.rotation[2]
+                rotation = consts.rotation[1]
+                print('r')
                 logging.debug("Rotating to right")
             elif 40 < vars.sensor_left_data < 70:
                 rotation = consts.rotation[0]
                 logging.debug("No rotation")
+                print('f')
             else:
-                rotation = consts.rotation[-2]
+                rotation = consts.rotation[-1]
                 logging.debug("Rotating to left")
+                print('l')
         elif vars.sensor_left_data > vars.sensor_right_data:
             if vars.sensor_right_data < 40:
-                rotation = consts.rotation[-2]
+                rotation = consts.rotation[-1]
                 logging.debug("Rotating to left")
+                print('l')
             elif 40 < vars.sensor_right_data < 70:
                 rotation = consts.rotation[0]
                 logging.debug("No rotation")
+                print('f')
             else:
-                rotation = consts.rotation[2]
+                rotation = consts.rotation[1]
                 logging.debug("Rotating to right")
+                print('r')
         else:
             rotation = consts.rotation[0]
             logging.debug("No rotation")
+            print('f')
 
-        actions.send_data_to_arduino_engine(speed, rotation)
-        return 0
-        #Max - 0.003 seconds for iteration
-    '''
+        actions.send_data_to_arduino(speed, rotation)
+        return False
     else:
-        if vars.stopper > 0:
-            if time.time() - vars.ticker < 0.1:
-                print("Sensors info: {}, {}, {}".format(vars.obstacle_distance_front_left,
-                                                        vars.obstacle_distance_left, vars.obstacle_distance_right))
-                #do_break()
-                logging.debug('Obstacle is at front -> stop moving')
-                vars.stopper = 0
-                return 1
-            else:
-                vars.stopper = 0
-                return 0
-        else:
-            vars.stopper = 1
-            vars.ticker = time.time()
-            return 0
-    '''
+        return True
