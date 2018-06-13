@@ -5,46 +5,48 @@ import logging
 import consts
 import vars
 import scripts
+from utility import log
 
 
+#@log
 def arduino_read():
-    logging.debug('@ arduino_read')
-    # current_time = time.time()    # Update current time
-    #read_ultrasonic_sensors()
-    read_arduino_engine()
-    '''
-    if abs(current_time - vars.arduino_engine_last_answer_time) > consts.RECONNECTION_TIME:    # Reconnecting engine
-        arduino_engine.connected = False
-        print('Reconnecting arduino_engine')
-        arduino_engine.reconnect()
-        vars.arduino_engine_last_answer = time.time()
-    
-    if (vars.current_time_sensors - vars.arduino_sensors_last_answer > consts.RECONNECTION_TIME):    # Reconnecting sensors
-        print('Reconnecting arduino_sensors')
-        arduino_sensors.reconnect()
-        vars.arduino_sensors_last_answer = time.time()
-    '''
-    logging.debug('$ arduino_read')
+    vars.arduino.send('u', 0)
+
+    data = vars.arduino.receive(1024)
+    if data:
+        vars.arduino_data += data.decode('ascii')
+        vars.arduino_last_update = time.time()
+    #else:
+    #    print('Resetting')
+    #    logging.debug('Resetting arduino')
+    #    vars.arduino.reconnect()
+    #    scripts.stop()
+    #    vars.state = consts.state['manual']
+
+    while True:
+        index = vars.arduino_data.find('\n')
+        if index == -1:
+            break
+
+        data = vars.arduino_data[:index]
+        vars.arduino_data = vars.arduino_data[index + 1:]
+
+        if data[0] in consts.command_group['sensors']:
+            update_sensor_data(data)
 
 
+#@log
 def client_messaging():
-    logging.debug('@ client_messaging')
-    # current_time = time.time() # Update current time
     read_client()
-    '''
-    if vars.current_time_client - vars.client_last_answer < consts.LOST_CONNECTION_TIME:   # Shutdown if connections lost
-        thread_handler.stop_all_threads()
-        vars.state = consts.STATE_LOST
-    '''
     send_ultrasonic_data()
-    logging.debug('$ client_messaging')
 
-
+#@log
 def main_cycle():
-    logging.debug('@ main_cycle')
     vars.server.create()
-    vars.arduino_engine.connect()
-    #vars.arduino_sensors.connect()
+    vars.arduino.connect()
+
+    vars.client_last_update = time.time()
+    vars.arduino_last_update = time.time()
 
     while True:
         logging.debug('main_cycle :: start iteration')
@@ -52,160 +54,130 @@ def main_cycle():
         arduino_read()
         state_to_actions[vars.state]()
         logging.debug('main_cycle :: end iteration')
-    #Max - 0.045 seconds
-
-def read_ultrasonic_sensors():
-    logging.debug('@ read_ultrasonic_sensors')
-    data = vars.arduino_sensors.receive(70)
-    if data:
-        # vars.arduino_sensors_last_answer_time = time.time()
-        data = data.decode('ascii')
-        logging.debug("Data: {}".format(data))
-        if data[0] == 'D':
-            temp = re.findall(r'd', data)
-            if len(temp) == 2:
-                match = re.findall(r'\d+', data)
-                if match:
-                    match = list(map(int, match))
-                    if len(match) == 3:
-                        if 1 < match[0] < 50:
-                            scripts.do_break()
-
-                        vars.obstacle_distance_front_left = match[0]
-                        vars.obstacle_distance_left = match[1]
-                        vars.obstacle_distance_right = match[2]
-                        logging.debug('Ultrasonic values changed to: {}, {}, {}'.format(match[0], match[1],
-                                                                                            match[2]))
-    logging.debug('$ read_ultrasonic_sensors')
 
 
-def read_arduino_engine():
-    logging.debug('@ read_arduino_engine')
-    data = vars.arduino_engine.receive(32)
-    if data:
-        print (data)
-    # if data:
-    #     vars.arduino_engine_last_answer_time = time.time()
-    logging.debug('$ read_arduino_engine')
+def update_sensor_data(data):
+    nums = int(data[1:])
+    if data[0] == consts.command_symbol_arduino['sensor_forward']:
+        vars.sensor_front_data = nums
+        logging.debug('sensor_front_data -> {}'.format(nums))
+        print('f', nums)
+    elif data[0] == consts.command_symbol_arduino['sensor_left']:
+        vars.sensor_left_data = nums
+        logging.debug('sensor_left_data -> {}'.format(nums))
+        print('l', nums)
+    elif data[0] == consts.command_symbol_arduino['sensor_right']:
+        vars.sensor_right_data = nums
+        logging.debug('sensor_right_data -> {}'.format(nums))
+        print('r', nums)
 
 
-def send_data_to_arduino_engine(speed=None, rotation=None):
-    logging.debug('@ send_data_to_arduino_engine')
+#@log
+def send_data_to_arduino(speed=None, rotation=None):
     if not speed:
         speed = vars.engine_speed
     if not rotation:
-        rotation = vars.rotation_angle
+        rotation = vars.rotation
+
+    #print(speed, rotation)
+
+    vars.arduino.send('s', speed)
+    vars.arduino.send('r', rotation)
+
     logging.debug("Speed: {}, Rotation: {}".format(speed, rotation))
-    vars.arduino_engine.send('s', speed)
-    '''
-    if rotation != consts.ROTATION[0]:
-        vars.arduino_engine.send('r', rotation)
-    else:
-        vars.arduino_engine.send('s', speed)
-    '''
-    '''
-    if rotation != consts.ROTATION[0]:
-        if rotation != vars.lastrotation:
-            vars.arduino_engine.send('r', rotation)
-            vars.lastrotation = rotation
-    else:
-        if speed != vars.lastspeed:
-            vars.arduino_engine.send('s', speed)
-            vars.lastspeed = speed
-    '''
 
 
-    '''
-    vars.arduino_engine.send('s', speed)
-    vars.lastspeed = speed
-    vars.arduino_engine.send('r', rotation)
-    '''
-    logging.debug('$ send_data_to_arduino_engine')
-
-
+#@log
 def read_client():
-    logging.debug('@ read_client')
-    data = vars.server.receive()
+    data = vars.server.receive(1024)
     if data:
-        data = data.decode('ascii')
-        logging.debug("Data: {}".format(data))
-        # vars.client_last_answer = time.time()
+        logging.debug('Data: {}'.format(data))
+        vars.socket_data += data.decode('ascii')
+        vars.client_last_update = time.time()
 
-        command = re.search(r'C.+?\n', data)
-        if command:
-            command = re.sub(r'[C\n]', '', command.group(0))
-            logging.debug("Command: {}".format(command))
-            print(command)
-            execute_command(command)
+    if time.time() - vars.client_last_update > consts.lost_connection_time:
+        logging.debug('Connection lag')
+        scripts.stop()
+        vars.state = consts.state['manual']
+        vars.socket_data = ''
 
-        speed = re.search(r's.+?\n', data)
-        if speed:
-            speed = re.sub(r'[s\n]', '', speed.group(0))
-            if speed:
-                speed = int(speed)
-            logging.debug("Speed: {}".format(speed))
-            vars.engine_speed = speed
+    while True:
+        index = vars.socket_data.find('\n')
+        if index == -1:
+            break
 
-        rotation = re.search(r'r.+?\n', data)
-        if rotation:
-            rotation = re.sub(r'[r\n]', '', rotation.group(0))
-            if rotation:
-                rotation = int(rotation)
-            logging.debug("Rotation: {}".format(rotation))
-            vars.rotation_angle = rotation
-    logging.debug('$ read_client')
+        data = vars.socket_data[:index]
+        vars.socket_data = vars.socket_data[index + 1 :]
 
+        if data[0] in consts.command_group['client']:
+            execute_command(data)
 
+#@log
 def execute_command(command):
-    try:
-        vars.state = command_to_state[command]
-    except KeyError:
-        logging.warning("Unknown command: '{}'".format(command))
+    if command in consts.command_group['manual']:
+        if vars.state == consts.state['manual']:
+            execute_manual_command(command)
+    else:
+        try:
+            vars.state = command_to_state[command]
+        except KeyError:
+            logging.warning("Unknown command: '{}'".format(command))
 
 
+def execute_manual_command(command):
+    if command == consts.command_symbol_client['forward']:
+        vars.engine_speed = consts.engine_speed[vars.engine_speed_max]
+    elif command == consts.command_symbol_client['backward']:
+        vars.engine_speed = consts.engine_speed[-vars.engine_speed_max]
+    elif command == consts.command_symbol_client['stay']:
+        vars.engine_speed = consts.engine_speed[0]
+    elif command == consts.command_symbol_client['speed_up']:
+        vars.engine_speed_max += 1
+        if vars.engine_speed_max == 4:
+            vars.engine_speed_max = 3
+    elif command == consts.command_symbol_client['speed_down']:
+        vars.engine_speed_max -= 1
+        if vars.engine_speed_max == 0:
+            vars.engine_speed_max = 1
+    elif command == consts.command_symbol_client['left']:
+        vars.rotation = consts.rotation[-3]
+    elif command == consts.command_symbol_client['right']:
+        vars.rotation = consts.rotation[3]
+    elif command == consts.command_symbol_client['middle']:
+        vars.rotation = consts.rotation[0]
+
+
+#@log
 def send_ultrasonic_data():
-    logging.debug('@ send_ultrasonic_data')
-    vars.server.send('Q', vars.obstacle_distance_front_left)
-    vars.server.send('L', vars.obstacle_distance_left)
-    vars.server.send('R', vars.obstacle_distance_right)
-    logging.debug('$ send_ultrasonic_data')
+    vars.server.send('Q', vars.sensor_front_data)
+    vars.server.send('L', vars.sensor_left_data)
+    vars.server.send('R', vars.sensor_right_data)
 
 
+#@log
 def actions_state_manual():
-    logging.debug("@ actions_state_manual")
     if scripts.obstacle_is_at_front():
-        #scripts.do_break()
+        scripts.stop()
         logging.debug("Obstacle is at front -> breaking")
-    send_data_to_arduino_engine()
-    logging.debug("$ actions_state_manual")
+    send_data_to_arduino()
 
 
+#@log
 def actions_state_exit():
-    logging.info("@ actions_state_exit")
-    scripts.do_break()
-    vars.arduino_sensors.close()
+    scripts.stop()
     vars.arduino_engine.close()
     vars.server.close()
-    logging.info("$ actions_state_exit")
     quit(0)
 
 
-def actions_state_auto():
-    logging.debug("@ actions_state_auto")
-    vars.state = consts.STATE_MANUAL
-    logging.debug("State changed :: STATE_MANUAL")
-    logging.debug("$ actions_state_auto")
-
-
+#@log
 def actions_state_reload():
-    logging.info("@ actions_state_reload")
-    vars.arduino_engine.reconnect()
-    vars.arduino_sensors.reconnect()
-    vars.state = consts.STATE_MANUAL
+    vars.arduino.reconnect()
+    vars.state = consts.state['manual']
     logging.debug("State changed :: STATE_MANUAL")
-    logging.info("$ actions_state_reload")
 
 
+#@log
 def actions_state_way():
     if not vars.wayflag:
         vars.ticker = time.time()
@@ -222,34 +194,21 @@ def actions_state_way():
             vars.ticker = time.time()
 
     res = scripts.move_through_the_corridor(vars.wayflag1)
-    logging.debug("@ actions_state_way")
     if res == 1:
-        vars.state = consts.STATE_MANUAL
+        vars.state = consts.state['manual']
         logging.debug("State changed :: STATE_MANUAL")
         vars.wayflag = False
-    logging.debug("$ actions_state_way")
-
-
-def actions_state_break():
-    logging.debug("@ actions_state_break")
-    scripts.do_break()
-    vars.state = consts.STATE_MANUAL
-    logging.debug("State changed :: STATE_MANUAL")
-    logging.debug("$ actions_state_break")
 
 
 command_to_state = {
-    'Exit': consts.STATE_EXIT,
-    'Auto': consts.STATE_AUTO,
-    'Reload': consts.STATE_RELOAD,
-    'Way': consts.STATE_WAY,
-    'Pow': consts.STATE_BREAK
+    consts.command_symbol_client['exit']: consts.state['exit'],
+    consts.command_symbol_client['reload']: consts.state['reload'],
+    consts.command_symbol_client['way']: consts.state['way'],
 }
+
 state_to_actions = {
-    consts.STATE_MANUAL: actions_state_manual,
-    consts.STATE_EXIT: actions_state_exit,
-    consts.STATE_AUTO: actions_state_auto,
-    consts.STATE_RELOAD: actions_state_reload,
-    consts.STATE_WAY: actions_state_way,
-    consts.STATE_BREAK: actions_state_break
+    consts.state['manual']: actions_state_manual,
+    consts.state['exit']: actions_state_exit,
+    consts.state['reload']: actions_state_reload,
+    consts.state['way']: actions_state_way,
 }

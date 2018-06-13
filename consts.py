@@ -1,16 +1,58 @@
-STATE_MANUAL = 0
-STATE_AUTO = 1
-STATE_BREAK = 2
-STATE_WAY = 3
-STATE_EXIT = 4
-STATE_RELOAD = 5
+state = {
+'manual': 0,
+'auto': 1,
+'break': 2,
+'way': 3,
+'exit': 4,
+'reload': 5,
+}
 
-RECONNECTION_TIME = 0.5
-LOST_CONNECTION_TIME = 1.5
+command_symbol_arduino = {
+'sensor_forward': 'F',
+'sensor_left': 'L',
+'sensor_right': 'R',
+}
 
-AVOIDANCE_DISTANCE = 20
+command_symbol_client = {
+'exit': 'E',
+'reload': 'R',
+'way': 'W',
+'forward': 'F',
+'backward': 'B',
+'stay': 'S',
+'speed_up': '+',
+'speed_down': '-',
+'left': 'L',
+'right': 'R',
+'middle': 'M'
+}
 
-ENGINE_SPEED = {
+command_group = {
+'arduino': (command_symbol_arduino['sensor_forward'], command_symbol_arduino['sensor_left'], command_symbol_arduino['sensor_right']),
+'sensors': (command_symbol_arduino['sensor_forward'], command_symbol_arduino['sensor_left'], command_symbol_arduino['sensor_right']),
+'client': (
+        command_symbol_client['forward'], command_symbol_client['backward'],
+        command_symbol_client['stay'], command_symbol_client['speed_up'],
+        command_symbol_client['speed_down'], command_symbol_client['left'],
+        command_symbol_client['right'], command_symbol_client['middle'],
+        command_symbol_client['exit'], command_symbol_client['reload'],
+        command_symbol_client['way']
+    ),
+'manual': (
+        command_symbol_client['forward'], command_symbol_client['backward'],
+        command_symbol_client['stay'], command_symbol_client['speed_up'],
+        command_symbol_client['speed_down'], command_symbol_client['left'],
+        command_symbol_client['right'], command_symbol_client['middle']
+    ),
+}
+
+
+reconnection_time = 0.5
+lost_connection_time = 0.5
+
+avoidance_distance = 20
+
+engine_speed = {
 -3: -100,
 -2: -66,
 -1: -33,
@@ -20,14 +62,14 @@ ENGINE_SPEED = {
 3: 100,
 }
 
-ROTATION = {
-45: -100,
-30: -66,
-15: -33,
+rotation = {
+-3: -100,
+-2: -66,
+-1: -33,
 0: 0,
--15: 33,
--30: 66,
--45: 100
+1: 33,
+2: 66,
+3: 100
 }
 
 ENGINE_SPEED_OLD = {
