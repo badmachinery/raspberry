@@ -1,41 +1,98 @@
-from arduino_lib import arduino_sensors, arduino_engine
-import constants as c
-import vars as v
 import time
+import logging
 
-def move(speed, rotation, seconds):
-    ''' moving only in auto state '''
-    t = time.time()
-    while time.time() - t < seconds:
-        if v.state == c.STATE_AUTO or v.state == c.STATE_BACK:
-            arduino_engine.send('s', speed)
-            arduino_engine.send('r', rotation)
-        else:
-            return False
+import consts
+import vars
+import actions
+from utility import log
 
-def do_break(power=1200, seconds=0.5):
-    ''' moving in every state '''
-    print('Breaking: {}, {}s'.format(power, seconds))
-    t = time.time()
-    while time.time() - t < seconds:
-        arduino_engine.send('b', power)
-        arduino_engine.send('r', c.SERVO_ANGLE[0])
+mark = 0
+flag = False
 
+
+def obstacle_is_at_front(distance=consts.avoidance_distance):
+    return 1 < vars.sensor_front_data < distance
+
+
+def obstacle_is_at_left(distance=consts.avoidance_distance):
+    return 1 < vars.sensor_left_data < distance
+
+
+def obstacle_is_at_right(distance=consts.avoidance_distance):
+    return 1 < vars.sensor_right_data < distance
+
+
+#@log
+def move(speed, rotation, seconds=0.1):
+    if time.time() - mark < seconds:
+        logging.debug("Continue moving")
+        actions.send_data_to_arduino(speed, rotation)
+        return False
+    else:
+        logging.debug('Stop moving')
+        return True
+
+
+#@log
 def stop():
-    ''' TODO we should take encoders' data into a point '''
-    print('Trying to stop')
-    do_break(seconds=0.5)
+    actions.send_data_to_arduino(consts.engine_speed[0], consts.rotation[0])
 
-def simple_front_obstacle_evasion():
-    ''' moving in every state '''
-    print('Simple front obstacle evasion ::: start')
-    #stop()
-    #move(c.ENGINE_SPEED[0], c.SERVO_ANGLE[0], 0.5)
-    while (v.obstacle_distance_front_left < c.AVOIDANCE_DISTANCE or v.obstacle_distance_front_right < c.AVOIDANCE_DISTANCE):
-        move(c.ENGINE_SPEED[-1], c.SERVO_ANGLE[0], 0.2)
-    print('Simple front obstacle evasion ::: done')
-    v.state = c.STATE_MANUAL
 
-def custom_script():
-    print('Custom script')
-    print('Done')
+#@log
+def move_through_the_corridor(moving):
+    if not obstacle_is_at_front(50):
+        logging.debug('No obstacle at front -> moving further')
+        if moving:
+            speed = consts.engine_speed[3]
+        else:
+            speed = consts.engine_speed[0]
+        rotation = consts.rotation[0]
+        if vars.sensor_right_data == 1:
+            vars.sensor_right_data = 500
+        if vars.sensor_left_data == 1:
+            vars.sensor_left_data = 500
+        if vars.sensor_left_data < vars.sensor_right_data:
+            if vars.sensor_left_data < 40:
+                rotation = consts.rotation[2]
+                logging.debug("Rotating to right")
+            elif 40 < vars.sensor_left_data < 70:
+                rotation = consts.rotation[0]
+                logging.debug("No rotation")
+            else:
+                rotation = consts.rotation[-2]
+                logging.debug("Rotating to left")
+        elif vars.sensor_left_data > vars.sensor_right_data:
+            if vars.sensor_right_data < 40:
+                rotation = consts.rotation[-2]
+                logging.debug("Rotating to left")
+            elif 40 < vars.sensor_right_data < 70:
+                rotation = consts.rotation[0]
+                logging.debug("No rotation")
+            else:
+                rotation = consts.rotation[2]
+                logging.debug("Rotating to right")
+        else:
+            rotation = consts.rotation[0]
+            logging.debug("No rotation")
+
+        actions.send_data_to_arduino_engine(speed, rotation)
+        return 0
+        #Max - 0.003 seconds for iteration
+    '''
+    else:
+        if vars.stopper > 0:
+            if time.time() - vars.ticker < 0.1:
+                print("Sensors info: {}, {}, {}".format(vars.obstacle_distance_front_left,
+                                                        vars.obstacle_distance_left, vars.obstacle_distance_right))
+                #do_break()
+                logging.debug('Obstacle is at front -> stop moving')
+                vars.stopper = 0
+                return 1
+            else:
+                vars.stopper = 0
+                return 0
+        else:
+            vars.stopper = 1
+            vars.ticker = time.time()
+            return 0
+    '''
