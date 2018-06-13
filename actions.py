@@ -1,182 +1,203 @@
 import time
 import re
-import smbus
-from random import randint
+import logging
 
-from threads import thread_handler
-from arduino_lib import arduino_sensors, arduino_engine
-from connection import socket_server
-import constants as c
-import vars as v
+import consts
+import vars
 import scripts
+from utility import log
 
-def arduino_read_cycle():
-    '''
-    1) Update current time
-    2) Check shutdown signal
-    3) Reading sensors data: updating variables at vars.py
-    4) Reading engine data
-    5) Reconnecting if necessary
-    '''
+
+#@log
+def arduino_read():
+    vars.arduino.send('u', 0)
+
+    data = vars.arduino.receive(1024)
+    if data:
+        vars.arduino_data += data.decode('ascii')
+        vars.arduino_last_update = time.time()
+    #else:
+    #    print('Resetting')
+    #    logging.debug('Resetting arduino')
+    #    vars.arduino.reconnect()
+    #    scripts.stop()
+    #    vars.state = consts.state['manual']
+
     while True:
-        ''' 1) '''
-        v.current_time_sensors = time.time()
+        index = vars.arduino_data.find('\n')
+        if index == -1:
+            break
 
-        ''' 2) '''
-        if thread_handler.events['arduino_read_cycle'].is_set():
-            return True
+        data = vars.arduino_data[:index]
+        vars.arduino_data = vars.arduino_data[index + 1:]
 
-        ''' 3) '''
-        read_ultrasonic_sensors()
-        ''' 4) '''
-        read_arduino_engine()
+        if data[0] in consts.command_group['sensors']:
+            update_sensor_data(data)
 
-        ''' 5) '''
-        #if (v.current_time_sensors - v.arduino_engine_last_answer > c.RECONNECTION_TIME):
-        #    print('Reconnecting arduino_engine')
-        #    arduino_engine.reconnect()
-        #    v.arduino_engine_last_answer = time.time()
 
-        #if (v.current_time_sensors - v.arduino_sensors_last_answer > c.RECONNECTION_TIME):
-        #    print('Reconnecting arduino_sensors')
-        #    arduino_sensors.reconnect()
-        #    v.arduino_sensors_last_answer = time.time()
+#@log
+def client_messaging():
+    read_client()
+    send_ultrasonic_data()
 
-def client_read_cycle():
-    '''
-    1) Update current time
-    2) Check shutdown signal
-    3) Receiving data from client
-    4) Trying to read command from client
-    5) Trying to read data from client
-    6) Shutting down if connection lost
-    '''
-    while True:
-        ''' 1) '''
-        v.current_time_client = time.time()
-
-        ''' 2) '''
-        if thread_handler.events['client_read_cycle'].is_set():
-            return True
-
-        ''' 3) '''
-        data = socket_server.receive()
-        if data:
-            data = data.decode('ascii')
-            v.client_last_answer = time.time()
-            ''' 4) '''
-            command = re.search(r'C.+?\n', data)
-            if command:
-                command = re.sub(r'C|\n', '', command.group(0))
-                v.client_commands.append(command)
-            ''' 5) '''
-            speed = re.search(r's.+?\n', data)
-            if speed:
-                speed = re.sub(r's|\n', '', speed.group(0))
-                if speed:
-                    speed = int(speed)
-                v.engine_speed = speed
-            rotation = re.search(r'r.+?\n', data)
-            if rotation:
-                rotation = re.sub(r'r|\n', '', rotation.group(0))
-                if rotation:
-                    rotation = int(rotation)
-                v.rotation_angle = rotation
-
-        ''' 6) '''
-        #if v.current_time_client - v.client_last_answer < c.LOST_CONNECTION_TIME:
-        #    thread_handler.stop_all_threads()
-        #    v.state = c.STATE_LOST
-
+#@log
 def main_cycle():
-    '''
-    1) Check shutdown signal
-    2) Executing commands
-    3) Check obstacles to evade
-    4) Sending data to arduino if we are in manual state
-    5) Printing data if we want to
-    '''
+    vars.server.create()
+    vars.arduino.connect()
+
+    vars.client_last_update = time.time()
+    vars.arduino_last_update = time.time()
+
     while True:
-        ''' 1) '''
-        if thread_handler.events['main_cycle'].is_set():
-            thread_handler.stop_all_threads()
-            time.sleep(0.2)
-            arduino_engine.close()
-            arduino_sensors.close()
-            socket_server.close()
-            return True
+        logging.debug('main_cycle :: start iteration')
+        client_messaging()  # We execute commands there, remember that
+        arduino_read()
+        state_to_actions[vars.state]()
+        logging.debug('main_cycle :: end iteration')
 
-        ''' 2) '''
-        commands = v.client_commands.copy()
-        v.client_commands.clear()
-        for command in commands:
-            try:
-                command_handler[command]()
-            except KeyError:
-                print ("Unknown command: '{}'".format(command))
 
-        ''' 3) '''
-        if need_to_evade_front():
-            v.state = c.STATE_BACK
-            thread_handler.new_thread(scripts.simple_front_obstacle_evasion())
+def update_sensor_data(data):
+    nums = int(data[1:])
+    if data[0] == consts.command_symbol_arduino['sensor_forward']:
+        vars.sensor_front_data = nums
+        logging.debug('sensor_front_data -> {}'.format(nums))
+    elif data[0] == consts.command_symbol_arduino['sensor_left']:
+        vars.sensor_left_data = nums
+        logging.debug('sensor_left_data -> {}'.format(nums))
+    elif data[0] == consts.command_symbol_arduino['sensor_right']:
+        vars.sensor_right_data = nums
+        logging.debug('sensor_right_data -> {}'.format(nums))
 
-        ''' 4) '''
-        if v.state == c.STATE_MANUAL:
-            send_data_to_arduino_engine()
 
-        ''' 5) '''
-        #print (v.obstacle_distance_front_left, v.obstacle_distance_front_right, v.obstacle_distance_left, v.obstacle_distance_right)
-        #print(v.engine_speed, v.rotation_angle)
+#@log
+def send_data_to_arduino(speed=None, rotation=None):
+    if not speed:
+        speed = vars.engine_speed
+    if not rotation:
+        rotation = vars.rotation
 
-def read_ultrasonic_sensors():
-    if arduino_sensors.is_connected():
-        data = arduino_sensors.receive(70)
-        if data:
-            v.arduino_sensors_last_answer = time.time()
-            data = data.decode('ascii')
-            if data[0] == 'D':
-                help = re.findall(r'd', data)
-                if len(help) == 3:
-                    match = re.findall(r'\d+', data)
-                    if match:
-                        match = list(map(int, match))
-                        if len(match) == 4:
-                            v.obstacle_distance_front_left = match[0]
-                            v.obstacle_distance_front_right = match[1]
-                            v.obstacle_distance_left = match[2]
-                            v.obstacle_distance_right = match[3]
+    #print(speed, rotation)
 
-def read_arduino_engine():
-    if arduino_engine.is_connected():
-        data = arduino_engine.receive(32)
-        if data:
-            v.arduino_engine_last_answer = time.time()
+    vars.arduino.send('s', speed)
+    vars.arduino.send('r', rotation)
 
-def send_data_to_arduino_engine():
-    if arduino_engine.is_connected():
-        arduino_engine.send('s', v.engine_speed)
-        arduino_engine.send('r', v.rotation_angle)
+    logging.debug("Speed: {}, Rotation: {}".format(speed, rotation))
 
-def need_to_evade_front():
-    if (1 < v.obstacle_distance_front_left < c.AVOIDANCE_DISTANCE) or (1 < v.obstacle_distance_front_right < c.AVOIDANCE_DISTANCE):
-        return True
+
+#@log
+def read_client():
+    data = vars.server.receive(1024)
+    if data:
+        logging.debug('Data: {}'.format(data))
+        vars.socket_data += data.decode('ascii')
+        vars.client_last_update = time.time()
+
+    if time.time() - vars.client_last_update > consts.lost_connection_time:
+        logging.debug('Connection lag')
+        scripts.stop()
+        vars.state = consts.state['manual']
+        vars.socket_data = ''
+
+    while True:
+        index = vars.socket_data.find('\n')
+        if index == -1:
+            break
+
+        data = vars.socket_data[:index]
+        vars.socket_data = vars.socket_data[index + 1 :]
+
+        if data[0] in consts.command_group['client']:
+            execute_command(data)
+
+#@log
+def execute_command(command):
+    if command in consts.command_group['manual']:
+        if vars.state == consts.state['manual']:
+            execute_manual_command(command)
     else:
-        return False
+        try:
+            vars.state = command_to_state[command]
+        except KeyError:
+            logging.warning("Unknown command: '{}'".format(command))
 
 
-def handle_command_stop():
-    thread_handler.stop_all_threads()
+def execute_manual_command(command):
+    if command == consts.command_symbol_client['forward']:
+        vars.engine_speed = consts.engine_speed[vars.engine_speed_max]
+    elif command == consts.command_symbol_client['backward']:
+        vars.engine_speed = consts.engine_speed[-vars.engine_speed_max]
+    elif command == consts.command_symbol_client['stay']:
+        vars.engine_speed = consts.engine_speed[0]
+    elif command == consts.command_symbol_client['speed_up']:
+        vars.engine_speed_max += 1
+        if vars.engine_speed_max == 4:
+            vars.engine_speed_max = 3
+    elif command == consts.command_symbol_client['speed_down']:
+        vars.engine_speed_max -= 1
+        if vars.engine_speed_max == 0:
+            vars.engine_speed_max = 1
+    elif command == consts.command_symbol_client['left']:
+        if vars.engine_speed == consts.engine_speed[0]:
+            vars.rotation = consts.rotation[-3]
+        else:
+            vars.rotation = consts.rotation[-1]
+    elif command == consts.command_symbol_client['right']:
+        if vars.engine_speed == consts.engine_speed[0]:
+            vars.rotation = consts.rotation[3]
+        else:
+            vars.rotation = consts.rotation[1]
+    elif command == consts.command_symbol_client['middle']:
+        vars.rotation = consts.rotation[0]
 
-def handle_command_script():
-    v.state = c.STATE_AUTO
-    thread_handler.new_thread(scripts.custom_script)
 
-def handle_command_reload():
-    arduino_engine.reconnect()
-    arduino_sensors.reconnect()
+#@log
+def send_ultrasonic_data():
+    vars.server.send('Q', vars.sensor_front_data)
+    vars.server.send('L', vars.sensor_left_data)
+    vars.server.send('R', vars.sensor_right_data)
 
-command_handler = {
-'Stop': handle_command_stop,
-'Auto': handle_command_script,
-'Load': handle_command_reload
+
+#@log
+def actions_state_manual():
+    if scripts.obstacle_is_at_front():
+        scripts.stop()
+        logging.debug("Obstacle is at front -> breaking")
+    send_data_to_arduino()
+
+
+#@log
+def actions_state_exit():
+    scripts.stop()
+    vars.arduino_engine.close()
+    vars.server.close()
+    quit(0)
+
+
+#@log
+def actions_state_reload():
+    vars.arduino.reconnect()
+    vars.state = consts.state['manual']
+    logging.debug("State changed :: STATE_MANUAL")
+
+
+#@log
+def actions_state_way():
+    res = scripts.move_through_the_corridor()
+    if res == True:
+        vars.state = consts.state['manual']
+        logging.debug("State changed :: STATE_MANUAL")
+        print('Done')
+
+
+command_to_state = {
+    consts.command_symbol_client['exit']: consts.state['exit'],
+    consts.command_symbol_client['reload']: consts.state['reload'],
+    consts.command_symbol_client['way']: consts.state['way'],
+}
+
+state_to_actions = {
+    consts.state['manual']: actions_state_manual,
+    consts.state['exit']: actions_state_exit,
+    consts.state['reload']: actions_state_reload,
+    consts.state['way']: actions_state_way,
 }
