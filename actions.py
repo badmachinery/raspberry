@@ -76,8 +76,6 @@ def send_data_to_arduino(speed=None, rotation=None):
     if not rotation:
         rotation = vars.rotation
 
-    #print(speed, rotation)
-
     vars.arduino.send('s', speed)
     vars.arduino.send('r', rotation)
 
@@ -168,7 +166,7 @@ def actions_state_manual():
 #@log
 def actions_state_exit():
     scripts.stop()
-    vars.arduino_engine.close()
+    vars.arduino.close()
     vars.server.close()
     quit(0)
 
@@ -176,23 +174,34 @@ def actions_state_exit():
 #@log
 def actions_state_reload():
     vars.arduino.reconnect()
+    print('Reconnect')
     vars.state = consts.state['manual']
     logging.debug("State changed :: STATE_MANUAL")
 
 
 #@log
 def actions_state_way():
+    '''
     res = scripts.move_through_the_corridor()
     if res == True:
         vars.state = consts.state['manual']
         logging.debug("State changed :: STATE_MANUAL")
         print('Done')
+    '''
+    vars.arduino.send('w', 0)
+    print('WAY')
+    time.sleep(0.1)
+    vars.state = consts.state['manual']
+
+def actions_state_idle():
+    pass
 
 
 command_to_state = {
     consts.command_symbol_client['exit']: consts.state['exit'],
     consts.command_symbol_client['reload']: consts.state['reload'],
     consts.command_symbol_client['way']: consts.state['way'],
+    consts.command_symbol_client['idle']: consts.state['idle'],
 }
 
 state_to_actions = {
@@ -200,4 +209,5 @@ state_to_actions = {
     consts.state['exit']: actions_state_exit,
     consts.state['reload']: actions_state_reload,
     consts.state['way']: actions_state_way,
+    consts.state['idle']: actions_state_idle,
 }

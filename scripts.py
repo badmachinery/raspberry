@@ -40,7 +40,7 @@ def stop():
 
 #@log
 def move_through_the_corridor():
-    if not obstacle_is_at_front(50):
+    if not obstacle_is_at_front(20):
         logging.debug('No obstacle at front -> moving further')
         speed = consts.engine_speed[3]
         rotation = consts.rotation[0]
@@ -51,33 +51,33 @@ def move_through_the_corridor():
         if vars.sensor_left_data < vars.sensor_right_data:
             if vars.sensor_left_data < 40:
                 rotation = consts.rotation[1]
-                print('r')
+                #print('r')
                 logging.debug("Rotating to right")
             elif 40 < vars.sensor_left_data < 70:
                 rotation = consts.rotation[0]
                 logging.debug("No rotation")
-                print('f')
+                #print('f')
             else:
                 rotation = consts.rotation[-1]
                 logging.debug("Rotating to left")
-                print('l')
+                #print('l')
         elif vars.sensor_left_data > vars.sensor_right_data:
             if vars.sensor_right_data < 40:
                 rotation = consts.rotation[-1]
                 logging.debug("Rotating to left")
-                print('l')
+                #print('l')
             elif 40 < vars.sensor_right_data < 70:
                 rotation = consts.rotation[0]
                 logging.debug("No rotation")
-                print('f')
+                #print('f')
             else:
                 rotation = consts.rotation[1]
                 logging.debug("Rotating to right")
-                print('r')
+                #print('r')
         else:
             rotation = consts.rotation[0]
             logging.debug("No rotation")
-            print('f')
+            #print('f')
 
         actions.send_data_to_arduino(speed, rotation)
         return False

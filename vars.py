@@ -3,7 +3,10 @@ import arduino_lib
 import socket_connection
 
 
+#arduino = arduino_lib.Arduino('/dev/ttyACM0')
+
 arduino = arduino_lib.Arduino('/dev/ttyACM0')
+
 server = socket_connection.SocketServer()
 
 arduino_data = ''

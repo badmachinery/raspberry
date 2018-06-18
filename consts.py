@@ -5,6 +5,7 @@ state = {
 'way': 3,
 'exit': 4,
 'reload': 5,
+'idle': 6,
 }
 
 command_symbol_arduino = {
@@ -24,7 +25,8 @@ command_symbol_client = {
 'speed_down': '-',
 'left': 'L',
 'right': 'R',
-'middle': 'M'
+'middle': 'M',
+'idle': 'I',
 }
 
 command_group = {
@@ -36,7 +38,7 @@ command_group = {
         command_symbol_client['speed_down'], command_symbol_client['left'],
         command_symbol_client['right'], command_symbol_client['middle'],
         command_symbol_client['exit'], command_symbol_client['reload'],
-        command_symbol_client['way']
+        command_symbol_client['way'], command_symbol_client['idle'],
     ),
 'manual': (
         command_symbol_client['forward'], command_symbol_client['backward'],
@@ -65,9 +67,9 @@ engine_speed = {
 rotation = {
 -3: -100,
 -2: -90,
--1: -70,
+-1: -80,
 0: 0,
-1: 70,
+1: 80,
 2: 90,
 3: 100
 }
